@@ -1,0 +1,131 @@
+import sqlite3
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Connect to the SQLite database (it will create student_grades.db if it doesn't exist)
+conn = sqlite3.connect('student_grades.db')
+cur = conn.cursor()
+
+# Create tables
+cur.execute('''
+    CREATE TABLE IF NOT EXISTS students (
+        student_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT,
+        last_name TEXT
+    )
+''')
+
+cur.execute('''
+    CREATE TABLE IF NOT EXISTS grades (
+        grade_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER,
+        subject TEXT,
+        grade INTEGER,
+        FOREIGN KEY (student_id) REFERENCES students(student_id)
+    )
+''')
+
+# Insert data into students table
+students_data = [
+    ('Alice', 'Johnson'),
+    ('Bob', 'Smith'),
+    ('Carol', 'White'),
+    ('David', 'Brown'),
+    ('Eve', 'Davis')
+]
+cur.executemany('INSERT INTO students (first_name, last_name) VALUES (?, ?)', students_data)
+
+# Insert data into grades table
+grades_data = [
+    (1, 'Math', 95),
+    (1, 'English', 88),
+    (1, 'History', 90),
+    (2, 'Math', 82),
+    (2, 'English', 76),
+    (2, 'History', 85),
+    (3, 'Math', 89),
+    (3, 'English', 92),
+    (3, 'History', 85),
+    (4, 'Math', 78),
+    (4, 'English', 84),
+    (4, 'History', 80),
+    (5, 'Math', 91),
+    (5, 'English', 87),
+    (5, 'History', 93)
+]
+cur.executemany('INSERT INTO grades (student_id, subject, grade) VALUES (?, ?, ?)', grades_data)
+
+# Commit the changes
+conn.commit()
+
+# Perform SQL queries
+
+# a) Retrieve all students' names and their grades
+cur.execute('''
+    SELECT students.first_name, students.last_name, grades.subject, grades.grade
+    FROM students
+    JOIN grades ON students.student_id = grades.student_id
+''')
+all_students_grades = cur.fetchall()
+
+# b) Find the average grade for each student
+cur.execute('''
+    SELECT students.first_name, students.last_name, AVG(grades.grade) AS avg_grade
+    FROM students
+    JOIN grades ON students.student_id = grades.student_id
+    GROUP BY students.student_id
+''')
+avg_grade_per_student = cur.fetchall()
+
+# c) Find the student with the highest average grade
+cur.execute('''
+    SELECT students.first_name, students.last_name, AVG(grades.grade) AS avg_grade
+    FROM students
+    JOIN grades ON students.student_id = grades.student_id
+    GROUP BY students.student_id
+    ORDER BY avg_grade DESC
+    LIMIT 1
+''')
+top_student = cur.fetchone()
+
+# d) Find the average grade for the Math subject
+cur.execute('''
+    SELECT AVG(grade) FROM grades WHERE subject = 'Math'
+''')
+avg_grade_math = cur.fetchone()
+
+# e) List all students who scored above 90 in any subject
+cur.execute('''
+    SELECT students.first_name, students.last_name, grades.subject, grades.grade
+    FROM students
+    JOIN grades ON students.student_id = grades.student_id
+    WHERE grades.grade > 90
+''')
+students_above_90 = cur.fetchall()
+
+# Load data into Pandas
+students_df = pd.read_sql_query('SELECT * FROM students', conn)
+grades_df = pd.read_sql_query('SELECT * FROM grades', conn)
+
+# Merge students and grades data
+merged_df = pd.read_sql_query('''
+    SELECT students.first_name, students.last_name, grades.subject, grades.grade
+    FROM students
+    JOIN grades ON students.student_id = grades.student_id
+''', conn)
+
+# Close the connection
+conn.close()
+
+# Data Analysis and Visualization
+
+# a) Plot average grades for each student
+avg_grades = merged_df.groupby(['first_name', 'last_name']).mean()['grade']
+avg_grades.plot(kind='bar', title='Average Grade per Student', ylabel='Average Grade')
+plt.show()
+
+# b) Create a bar chart for average grade by subject
+avg_subject_grades = merged_df.groupby('subject').mean()['grade']
+avg_subject_grades.plot(kind='bar', color='skyblue', title='Average Grade per Subject', ylabel='Average Grade')
+plt.show()
+
